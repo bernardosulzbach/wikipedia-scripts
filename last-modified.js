@@ -1,8 +1,6 @@
 // This script is HEAVILY based on [[User:Anomie/lastmod.js]].
 // The main raison d'être for this script is compatibility with the coordinates which are shown in location pages.
 
-importStylesheet('User:BernardoSulzbach/last-modified.css');
-
 if (typeof (window.LastModDateFormat) == 'undefined') window.LastModDateFormat = "dmy";
 if (typeof (window.LastModRelative) == 'undefined') window.LastModRelative = false;
 if (typeof (window.LastModUseUTC) == 'undefined') window.LastModUseUTC = false;

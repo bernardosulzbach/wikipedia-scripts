@@ -8,18 +8,14 @@ if (typeof (window.LastModRelative) == 'undefined') window.LastModRelative = fal
 if (typeof (window.LastModUseUTC) == 'undefined') window.LastModUseUTC = false;
 if (typeof (window.LastModMonths) == 'undefined') window.LastModMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-function getElementToInsertBefore() {
-    const coordinatesElement = document.getElementById('coordinates');
-    if (coordinatesElement) {
-        return coordinatesElement;
-    }
+function getElementToInsertInto() {
     return document.getElementById('siteSub');
 }
 
 if (mw.config.get('wgNamespaceNumber') >= 0) mw.loader.using('mediawiki.util', function () {
     $(document).ready(function () {
-        const elementToInsertBefore = getElementToInsertBefore();
-        if (!elementToInsertBefore) return;
+        const elementToInsertInto = getElementToInsertInto();
+        if (!elementToInsertInto) return;
         var articleId = mw.config.get('wgArticleId');
         $.ajax({
             url: mw.util.wikiScript('api'),
@@ -104,10 +100,7 @@ if (mw.config.get('wgNamespaceNumber') >= 0) mw.loader.using('mediawiki.util', f
                     }
                     dt += ' ' + m[4] + ':' + m[5];
                 }
-                const our_span = document.createElement('span');
-                our_span.className = 'last-modified-header';
-                our_span.appendChild(document.createTextNode('Last modified ' + dt));
-                elementToInsertBefore.parentNode.insertBefore(our_span, elementToInsertBefore);
+                elementToInsertInto.textContent += ' (last modified ' + dt + ')'
             },
             error: function (xhr, textStatus, errorThrown) {
                 throw new Error('AJAX error: ' + textStatus + ' ' + errorThrown);

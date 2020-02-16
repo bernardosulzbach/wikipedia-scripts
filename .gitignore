@@ -1,2 +1,9 @@
 # WebStorm
 .idea
+
+secrets.json
+
+dependencies
+
+# Logs
+*.log

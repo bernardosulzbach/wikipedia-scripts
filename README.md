@@ -15,4 +15,4 @@ It uses the credentials from a `secrets.json` file with the following structure.
 }
 ```
 
-It requires Firefox and [GeckoDriver](https://github.com/mozilla/geckodriver/releases) to work.
+It requires Firefox and [geckodriver](https://github.com/mozilla/geckodriver/releases) to work.

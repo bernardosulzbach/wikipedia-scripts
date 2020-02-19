@@ -4,6 +4,7 @@ import logging
 import urllib.parse
 import argparse
 from html.parser import HTMLParser
+from typing import Tuple, List, Optional
 
 from selenium import webdriver
 from selenium.webdriver.support import expected_conditions
@@ -38,7 +39,7 @@ def get_expected_field_from_json(json_object, field_name):
     return json_object[field_name]
 
 
-def read_credentials():
+def read_credentials() -> Tuple[str, str]:
     with open(SECRETS_FILE_PATH) as secrets_file:
         json_object = json.loads(secrets_file.read())
         username = get_expected_field_from_json(json_object, USERNAME_JSON_FIELD)
@@ -51,14 +52,14 @@ def fill_input_field(driver, xpath, keys):
     input_field.send_keys(keys)
 
 
-def get_attribute(attributes, required_attribute_name: str):
+def get_attribute(attributes: List[Tuple[str, str]], required_attribute_name: str) -> Optional[str]:
     for attribute_name, attribute_value in attributes:
         if attribute_name == required_attribute_name:
             return attribute_value
     return None
 
 
-def has_class(attributes, class_name) -> bool:
+def has_class(attributes: List[Tuple[str, str]], class_name: str) -> bool:
     for attribute_name, attribute_value in attributes:
         if attribute_name == 'class':
             return class_name in attribute_value.split(' ')
@@ -67,7 +68,6 @@ def has_class(attributes, class_name) -> bool:
 
 class WatchlistEntry:
     def __init__(self, page_title: str):
-        assert isinstance(page_title, str)
         self.page_title = page_title
         self.page_url = None
         self.user = None
@@ -122,11 +122,11 @@ class WatchlistParser(HTMLParser):
             self.watchlist_entries[-1].diff = data
             self.collecting_diff = False
 
+    def error(self, message):
+        raise Exception(message)
+
 
 def set_query_parameter(query: str, parameter_name: str, new_parameter_value: str) -> str:
-    assert isinstance(query, str)
-    assert isinstance(parameter_name, str)
-    assert isinstance(new_parameter_value, str)
     parsed_url = urllib.parse.urlparse(query)
     query_parameters = urllib.parse.parse_qs(parsed_url.query, strict_parsing=True)
     query_parameters.update({parameter_name: [new_parameter_value]})

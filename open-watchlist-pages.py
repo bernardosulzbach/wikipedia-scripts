@@ -149,6 +149,7 @@ def main():
     logging.basicConfig(level=logging.INFO, filename=LOG_FILENAME, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
 
     options = webdriver.FirefoxOptions()
+    options.add_argument('-headless')
     driver = webdriver.Firefox(executable_path='./dependencies/geckodriver', options=options)
 
     driver.get(WATCHLIST_URL)

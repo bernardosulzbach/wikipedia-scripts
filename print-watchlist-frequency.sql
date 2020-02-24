@@ -1,3 +1,6 @@
+.headers on
+.mode column
+
 SELECT name,
        count(*)                                                                                AS occurrences,
        min(date)                                                                               AS first_occurrence,
@@ -6,4 +9,4 @@ SELECT name,
 FROM page_open
 GROUP BY name
 HAVING count(*) > 1
-ORDER BY occurrences DESC, name;
+ORDER BY times_per_day DESC, occurrences DESC, name;

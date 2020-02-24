@@ -185,7 +185,7 @@ class Database:
     FOREIGN KEY (name) REFERENCES pages (name)
 )""")
         cursor.execute("""CREATE INDEX IF NOT EXISTS page_name_index ON page (name)""")
-        cursor.execute("""CREATE INDEX IF NOT EXISTS page_open_name_index ON page_open (name)""")
+        cursor.execute("""CREATE INDEX IF NOT EXISTS page_open_name_date_index ON page_open (name, date)""")
 
     def add_page_open(self, page_title: str):
         cursor = self.connection.cursor()
@@ -193,18 +193,7 @@ class Database:
         cursor.execute("INSERT INTO page_open VALUES (?, ?)", (page_title, get_iso_date()))
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Open the most recent unseen pages from your Wikipedia watchlist.')
-    parser.add_argument(COUNT_ARGUMENT_NAME, type=int, help='the number of pages to open')
-    arguments = vars(parser.parse_args())
-    maximum_opened_pages = arguments[COUNT_ARGUMENT_NAME]
-
-    logging.basicConfig(level=logging.INFO, filename=LOG_FILENAME, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
-
-    options = webdriver.FirefoxOptions()
-    options.add_argument('-headless')
-    driver = webdriver.Firefox(executable_path='./dependencies/geckodriver', options=options)
-
+def open_pages(driver, maximum_opened_pages):
     driver.get(WATCHLIST_URL)
 
     username, password = read_credentials()
@@ -238,6 +227,24 @@ def main():
             fetched_pages += len(parser.watchlist_entries)
         logging.info('Fetched {} page(s).'.format(fetched_pages))
         logging.info('Unseen entries that were not opened: {}.'.format(unseen_but_not_opened_pages))
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Open the most recent unseen pages from your Wikipedia watchlist.')
+    parser.add_argument(COUNT_ARGUMENT_NAME, type=int, help='the number of pages to open')
+    arguments = vars(parser.parse_args())
+    maximum_opened_pages = arguments[COUNT_ARGUMENT_NAME]
+
+    logging.basicConfig(level=logging.INFO, filename=LOG_FILENAME, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+
+    options = webdriver.FirefoxOptions()
+    options.add_argument('-headless')
+    driver = webdriver.Firefox(executable_path='./dependencies/geckodriver', options=options)
+    try:
+        open_pages(driver, maximum_opened_pages)
+    except Exception as e:
+        logging.exception(e)
+    finally:
         driver.quit()
 
 

@@ -1,5 +1,6 @@
-.headers on
 .mode column
+.headers on
+.width 80
 
 SELECT name,
        count(*)                                                                                AS occurrences,

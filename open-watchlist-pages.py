@@ -147,7 +147,7 @@ def set_query_parameter(query: str, parameter_name: str, new_parameter_value: st
     return urllib.parse.urlunparse(url_bits)
 
 
-def get_iso_date():
+def get_iso_date() -> str:
     # Calculate the offset taking into account daylight saving time
     utc_offset_sec = time.altzone if time.localtime().tm_isdst else time.timezone
     utc_offset = datetime.timedelta(seconds=-utc_offset_sec)
@@ -168,7 +168,10 @@ class Database:
         self.connection.commit()
         self.connection.close()
 
-    def ensure_tables_exist(self):
+    def ensure_tables_exist(self) -> None:
+        if self.connection is None:
+            logging.warning('Tried to ensure tables exist but is not connected to the database.')
+            return
         cursor = self.connection.cursor()
         cursor.execute("""SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'page'""")
         if cursor.fetchone() is None:
@@ -189,14 +192,14 @@ class Database:
 
     def add_page_open(self, page_title: str):
         if self.connection is None:
-            logging.warning('Tried to add a page open but is not connected to the Database.')
+            logging.warning('Tried to add a page open but is not connected to the database.')
             return
         cursor = self.connection.cursor()
         cursor.execute("INSERT OR IGNORE INTO page VALUES (?)", (page_title,))
         cursor.execute("INSERT INTO page_open VALUES (?, ?)", (page_title, get_iso_date()))
 
 
-def open_pages(driver, maximum_opened_pages):
+def open_pages(driver: webdriver.Firefox, maximum_opened_pages: int) -> None:
     driver.get(WATCHLIST_URL)
 
     username, password = read_credentials()

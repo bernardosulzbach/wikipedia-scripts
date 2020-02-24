@@ -156,7 +156,7 @@ def get_iso_date():
 
 class Database:
     def __init__(self, filename: str):
-        self.connection = None
+        self.connection: Optional[sqlite3.Connection] = None
         self.filename = filename
 
     def __enter__(self):
@@ -188,6 +188,9 @@ class Database:
         cursor.execute("""CREATE INDEX IF NOT EXISTS page_open_name_date_index ON page_open (name, date)""")
 
     def add_page_open(self, page_title: str):
+        if self.connection is None:
+            logging.warning('Tried to add a page open but is not connected to the Database.')
+            return
         cursor = self.connection.cursor()
         cursor.execute("INSERT OR IGNORE INTO page VALUES (?)", (page_title,))
         cursor.execute("INSERT INTO page_open VALUES (?, ?)", (page_title, get_iso_date()))

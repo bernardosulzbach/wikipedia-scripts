@@ -89,11 +89,11 @@ class WatchlistEntry:
 class WatchlistParser(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.ignoring_everything = False
-        self.printing_data = False
+        self.ignoring_everything: bool = False
+        self.printing_data: bool = False
         self.watchlist_entries: [WatchlistEntry] = []
-        self.collecting_diff = False
-        self.next_seen = None
+        self.collecting_diff: bool = False
+        self.next_seen: Optional[bool] = None
 
     def handle_starttag(self, tag, attributes):
         if self.ignoring_everything:
@@ -157,7 +157,7 @@ def get_iso_date():
 class Database:
     def __init__(self, filename: str):
         self.connection: Optional[sqlite3.Connection] = None
-        self.filename = filename
+        self.filename: str = filename
 
     def __enter__(self):
         self.connection = sqlite3.connect(self.filename)

@@ -75,12 +75,12 @@ def has_class(attributes: List[Tuple[str, str]], class_name: str) -> bool:
 
 class WatchlistEntry:
     def __init__(self, page_title: str):
-        self.page_title = page_title
-        self.page_url = None
-        self.user = None
-        self.user_url = None
-        self.diff = None
-        self.seen = None
+        self.page_title: str = page_title
+        self.page_url: Optional[str] = None
+        self.user: Optional[str] = None
+        self.user_url: Optional[str] = None
+        self.diff: Optional[str] = None
+        self.seen: Optional[bool] = None
 
     def __str__(self):
         return '{} by {} ({})'.format(self.page_title, self.user, self.diff)

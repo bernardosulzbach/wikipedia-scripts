@@ -1,6 +1,6 @@
 .mode column
 .headers on
-.width 80
+.width 40
 
 WITH main_page_statistics AS
          (SELECT name,

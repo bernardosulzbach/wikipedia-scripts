@@ -1,19 +1,26 @@
-import json
-import webbrowser
-import logging
-import urllib.parse
 import argparse
+import datetime
+import json
+import logging
+import sqlite3
+import time
+import urllib.parse
+import webbrowser
 from html.parser import HTMLParser
 from typing import Tuple, List, Optional
 
 from selenium import webdriver
+from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.common.by import By
 
 WATCHLIST_XPATH = '//*[@id="mw-content-text"]/div[4]/ul'
 
-LOG_FILENAME = 'open-watchlist-pages.log'
+SCRIPT_NAME = 'open-watchlist-pages'
+
+DATABASE_FILENAME = SCRIPT_NAME + '.db'
+
+LOG_FILENAME = SCRIPT_NAME + '.log'
 LOG_FORMAT = '[%(asctime)s] %(levelname)s %(module)s.%(funcName)s: %(message)s'
 LOG_DATE_FORMAT = '%Y-%m-%dT%H:%M:%S%z'
 
@@ -140,6 +147,52 @@ def set_query_parameter(query: str, parameter_name: str, new_parameter_value: st
     return urllib.parse.urlunparse(url_bits)
 
 
+def get_iso_date():
+    # Calculate the offset taking into account daylight saving time
+    utc_offset_sec = time.altzone if time.localtime().tm_isdst else time.timezone
+    utc_offset = datetime.timedelta(seconds=-utc_offset_sec)
+    return datetime.datetime.now().replace(tzinfo=datetime.timezone(offset=utc_offset)).isoformat()
+
+
+class Database:
+    def __init__(self, filename: str):
+        self.connection = None
+        self.filename = filename
+
+    def __enter__(self):
+        self.connection = sqlite3.connect(self.filename)
+        self.ensure_tables_exist()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.connection.commit()
+        self.connection.close()
+
+    def ensure_tables_exist(self):
+        cursor = self.connection.cursor()
+        cursor.execute("""SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'page'""")
+        if cursor.fetchone() is None:
+            # Create the tables if they don't exist.
+            cursor.execute("""CREATE TABLE page
+(
+    name TEXT PRIMARY KEY
+)""")
+            cursor.execute("""CREATE TABLE page_open
+(
+    name TEXT,
+    date TEXT,
+    PRIMARY KEY (name, date),
+    FOREIGN KEY (name) REFERENCES pages (name)
+)""")
+        cursor.execute("""CREATE INDEX IF NOT EXISTS page_name_index ON page (name)""")
+        cursor.execute("""CREATE INDEX IF NOT EXISTS page_open_name_index ON page_open (name)""")
+
+    def add_page_open(self, page_title: str):
+        cursor = self.connection.cursor()
+        cursor.execute("INSERT OR IGNORE INTO page VALUES (?)", (page_title,))
+        cursor.execute("INSERT INTO page_open VALUES (?, ?)", (page_title, get_iso_date()))
+
+
 def main():
     parser = argparse.ArgumentParser(description='Open the most recent unseen pages from your Wikipedia watchlist.')
     parser.add_argument(COUNT_ARGUMENT_NAME, type=int, help='the number of pages to open')
@@ -165,24 +218,27 @@ def main():
 
     wait = WebDriverWait(driver, 10)
     condition = expected_conditions.presence_of_all_elements_located((By.XPATH, WATCHLIST_XPATH))
-    for watchlist_section in wait.until(condition):
-        watchlist_html = watchlist_section.get_attribute('innerHTML')
-        parser = WatchlistParser()
-        parser.feed(watchlist_html)
-        for i, entry in enumerate(parser.watchlist_entries):
-            if entry.seen:
-                logging.info('Skipped {} as it was seen.'.format(entry.page_title))
-            elif opened_pages < maximum_opened_pages:
-                url = set_query_parameter(WIKIPEDIA_BASE_URL + entry.page_url, 'diff', '0')
-                webbrowser.open(url)
-                opened_pages += 1
-                logging.info('Opened {} ({}).'.format(entry.page_title, url))
-            else:
-                unseen_but_not_opened_pages += 1
-        fetched_pages += len(parser.watchlist_entries)
-    logging.info('Fetched {} page(s).'.format(fetched_pages))
-    logging.info('Unseen entries that were not opened: {}.'.format(unseen_but_not_opened_pages))
-    driver.quit()
+
+    with Database(DATABASE_FILENAME) as database:
+        for watchlist_section in wait.until(condition):
+            watchlist_html = watchlist_section.get_attribute('innerHTML')
+            parser = WatchlistParser()
+            parser.feed(watchlist_html)
+            for i, entry in enumerate(parser.watchlist_entries):
+                if entry.seen:
+                    logging.info('Skipped {} as it was seen.'.format(entry.page_title))
+                elif opened_pages < maximum_opened_pages:
+                    url = set_query_parameter(WIKIPEDIA_BASE_URL + entry.page_url, 'diff', '0')
+                    webbrowser.open(url)
+                    database.add_page_open(entry.page_title)
+                    opened_pages += 1
+                    logging.info('Opened {} ({}).'.format(entry.page_title, url))
+                else:
+                    unseen_but_not_opened_pages += 1
+            fetched_pages += len(parser.watchlist_entries)
+        logging.info('Fetched {} page(s).'.format(fetched_pages))
+        logging.info('Unseen entries that were not opened: {}.'.format(unseen_but_not_opened_pages))
+        driver.quit()
 
 
 if __name__ == '__main__':

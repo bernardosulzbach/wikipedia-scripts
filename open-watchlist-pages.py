@@ -218,7 +218,7 @@ def open_pages(driver, maximum_opened_pages):
                     logging.info('Skipped {} as it was seen.'.format(entry.page_title))
                 elif opened_pages < maximum_opened_pages:
                     url = set_query_parameter(WIKIPEDIA_BASE_URL + entry.page_url, 'diff', '0')
-                    webbrowser.open(url)
+                    webbrowser.open(url, autoraise=False)
                     database.add_page_open(entry.page_title)
                     opened_pages += 1
                     logging.info('Opened {} ({}).'.format(entry.page_title, url))

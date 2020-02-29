@@ -59,17 +59,21 @@ def fill_input_field(driver, xpath, keys):
     input_field.send_keys(keys)
 
 
-def get_attribute(attributes: List[Tuple[str, str]], required_attribute_name: str) -> Optional[str]:
+def get_attribute(attributes: List[Tuple[str, str]], name: str) -> Optional[str]:
     for attribute_name, attribute_value in attributes:
-        if attribute_name == required_attribute_name:
+        if attribute_name == name:
             return attribute_value
     return None
 
 
-def has_class(attributes: List[Tuple[str, str]], class_name: str) -> bool:
-    for attribute_name, attribute_value in attributes:
-        if attribute_name == 'class':
-            return class_name in attribute_value.split(' ')
+def has_attribute(attributes: List[Tuple[str, str]], name: str) -> bool:
+    return get_attribute(attributes, name) is not None
+
+
+def has_class(attributes: List[Tuple[str, str]], name: str) -> bool:
+    class_attribute = get_attribute(attributes, 'class')
+    if class_attribute:
+        return name in class_attribute.split(' ')
     return False
 
 
@@ -99,7 +103,10 @@ class WatchlistParser(HTMLParser):
         if self.ignoring_everything:
             return
         if has_class(attributes, 'mw-changeslist-line'):
-            if has_class(attributes, 'mw-changeslist-line-watched'):
+            if has_attribute(attributes, 'data-mw-logaction'):
+                log_action_name = get_attribute(attributes, 'data-mw-logaction')
+                logging.warning('Ignoring a log action of type {}.'.format(log_action_name))
+            elif has_class(attributes, 'mw-changeslist-line-watched'):
                 self.next_seen = False
             elif has_class(attributes, 'mw-changeslist-line-not-watched'):
                 self.next_seen = True

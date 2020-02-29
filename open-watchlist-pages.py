@@ -140,18 +140,32 @@ class WatchlistParser(HTMLParser):
         raise Exception(message)
 
 
-def set_query_parameter(query: str, parameter_name: str, new_parameter_value: str) -> str:
+def get_query_parameters(query: str) -> dict:
     parsed_url = urllib.parse.urlparse(query)
-    query_parameters = urllib.parse.parse_qs(parsed_url.query, strict_parsing=True)
-    query_parameters.update({parameter_name: [new_parameter_value]})
+    return urllib.parse.parse_qs(parsed_url.query, strict_parsing=True)
+
+
+def set_query_parameters(query: str, query_parameters: dict) -> str:
+    parsed_url = urllib.parse.urlparse(query)
     scheme = parsed_url.scheme
     netloc = parsed_url.netloc
     path = parsed_url.path
     params = parsed_url.params
     query = urllib.parse.urlencode(query_parameters, doseq=True, quote_via=urllib.parse.quote)
     fragment = parsed_url.fragment
-    url_bits = (scheme, netloc, path, params, query, fragment)
-    return urllib.parse.urlunparse(url_bits)
+    return urllib.parse.urlunparse((scheme, netloc, path, params, query, fragment))
+
+
+def remove_query_parameter(query: str, parameter_name: str) -> str:
+    query_parameters = get_query_parameters(query)
+    query_parameters.pop(parameter_name)
+    return set_query_parameters(query, query_parameters)
+
+
+def set_query_parameter(query: str, parameter_name: str, new_parameter_value: str) -> str:
+    query_parameters = get_query_parameters(query)
+    query_parameters.update({parameter_name: [new_parameter_value]})
+    return set_query_parameters(query, query_parameters)
 
 
 def get_iso_date() -> str:
@@ -231,6 +245,7 @@ def open_pages(driver: webdriver.Firefox, maximum_opened_pages: int) -> None:
                     logging.info('Skipped {} as it was seen.'.format(entry.page_title))
                 elif opened_pages < maximum_opened_pages:
                     url = set_query_parameter(WIKIPEDIA_BASE_URL + entry.page_url, 'diff', '0')
+                    url = remove_query_parameter(url, 'curid')
                     webbrowser.open(url, autoraise=False)
                     database.add_page_open(entry.page_title)
                     opened_pages += 1

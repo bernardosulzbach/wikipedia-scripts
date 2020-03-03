@@ -15,8 +15,12 @@ from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
 WATCHLIST_XPATH = '//*[@id="mw-content-text"]/div[4]/ul'
+EDIT_WATCHLIST_XPATH = '//div/div/span/label/a[1]'
 
 SCRIPT_NAME = 'open-watchlist-pages'
+
+# In seconds
+WEBDRIVER_TIMEOUT = 10
 
 DATABASE_FILENAME = SCRIPT_NAME + '.db'
 
@@ -28,6 +32,8 @@ COUNT_ARGUMENT_NAME = 'count'
 
 WIKIPEDIA_BASE_URL = 'https://en.wikipedia.org'
 WATCHLIST_URL = WIKIPEDIA_BASE_URL + '/wiki/Special:Watchlist'
+EDIT_WATCHLIST_URL = WIKIPEDIA_BASE_URL + '/wiki/Special:EditWatchlist'
+LOGIN_URL = WIKIPEDIA_BASE_URL + '/wiki/Special:UserLogin'
 
 SECRETS_FILE_PATH = './secrets.json'
 
@@ -93,25 +99,28 @@ class WatchlistEntry:
 class WatchlistParser(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.ignoring_everything: bool = False
         self.printing_data: bool = False
         self.watchlist_entries: [WatchlistEntry] = []
         self.collecting_diff: bool = False
         self.next_seen: Optional[bool] = None
+        self.skipping_log_action: bool = False
 
     def handle_starttag(self, tag, attributes):
-        if self.ignoring_everything:
-            return
         if has_class(attributes, 'mw-changeslist-line'):
             if has_attribute(attributes, 'data-mw-logaction'):
                 log_action_name = get_attribute(attributes, 'data-mw-logaction')
                 logging.warning('Ignoring a log action of type {}.'.format(log_action_name))
+                self.skipping_log_action = True
             elif has_class(attributes, 'mw-changeslist-line-watched'):
                 self.next_seen = False
+                self.skipping_log_action = False
             elif has_class(attributes, 'mw-changeslist-line-not-watched'):
                 self.next_seen = True
+                self.skipping_log_action = False
             else:
                 raise Exception('Should not have a line that does not define if it has been seen or not.')
+        if self.skipping_log_action:
+            return
         if has_class(attributes, 'mw-changeslist-diff'):
             self.watchlist_entries.append(WatchlistEntry(get_attribute(attributes, 'title')))
             self.watchlist_entries[-1].page_url = get_attribute(attributes, 'href')
@@ -125,13 +134,7 @@ class WatchlistParser(HTMLParser):
         if has_class(attributes, 'mw-diff-bytes'):
             self.collecting_diff = True
 
-    def handle_endtag(self, tag):
-        if self.ignoring_everything:
-            return
-
     def handle_data(self, data):
-        if self.ignoring_everything:
-            return
         if self.collecting_diff:
             self.watchlist_entries[-1].diff = data
             self.collecting_diff = False
@@ -208,6 +211,13 @@ class Database:
     PRIMARY KEY (name, date),
     FOREIGN KEY (name) REFERENCES pages (name)
 )""")
+            cursor.execute("""CREATE TABLE watchlist_page
+(
+    name TEXT,
+    date TEXT,
+    PRIMARY KEY (name),
+    FOREIGN KEY (name) REFERENCES page (name)
+)""")
         cursor.execute("""CREATE INDEX IF NOT EXISTS page_name_index ON page (name)""")
         cursor.execute("""CREATE INDEX IF NOT EXISTS page_open_name_date_index ON page_open (name, date)""")
 
@@ -219,20 +229,45 @@ class Database:
         cursor.execute("INSERT OR IGNORE INTO page VALUES (?)", (page_title,))
         cursor.execute("INSERT INTO page_open VALUES (?, ?)", (page_title, get_iso_date()))
 
+    def add_watchlist_page(self, page_title: str):
+        if self.connection is None:
+            logging.warning('Tried to add a watchlist page but is not connected to the database.')
+            return
+        cursor = self.connection.cursor()
+        now = get_iso_date()
+        cursor.execute("INSERT OR IGNORE INTO page VALUES (?)", (page_title,))
+        cursor.execute("""INSERT INTO watchlist_page
+VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET date=?""", (page_title, now, now))
 
-def open_pages(driver: webdriver.Firefox, maximum_opened_pages: int) -> None:
-    driver.get(WATCHLIST_URL)
+
+def login(driver: webdriver.Firefox) -> None:
+    driver.get(LOGIN_URL)
 
     username, password = read_credentials()
     fill_input_field(driver, USERNAME_FIELD_XPATH, username)
     fill_input_field(driver, PASSWORD_FIELD_XPATH, password)
     driver.find_element_by_xpath(LOGIN_BUTTON_XPATH).click()
 
+
+def update_watchlist(driver: webdriver.Firefox) -> None:
+    driver.get(EDIT_WATCHLIST_URL)
+
+    wait = WebDriverWait(driver, WEBDRIVER_TIMEOUT)
+    condition = expected_conditions.presence_of_all_elements_located((By.XPATH, EDIT_WATCHLIST_XPATH))
+    with Database(DATABASE_FILENAME) as database:
+        for watchlist_item in wait.until(condition):
+            item_text = watchlist_item.get_attribute('innerHTML')
+            database.add_watchlist_page(item_text)
+
+
+def open_pages(driver: webdriver.Firefox, maximum_opened_pages: int) -> None:
+    driver.get(WATCHLIST_URL)
+
     fetched_pages = 0
     opened_pages = 0
     unseen_but_not_opened_pages = 0
 
-    wait = WebDriverWait(driver, 10)
+    wait = WebDriverWait(driver, WEBDRIVER_TIMEOUT)
     condition = expected_conditions.presence_of_all_elements_located((By.XPATH, WATCHLIST_XPATH))
 
     with Database(DATABASE_FILENAME) as database:
@@ -269,6 +304,8 @@ def main():
     options.add_argument('-headless')
     driver = webdriver.Firefox(executable_path='./dependencies/geckodriver', options=options)
     try:
+        login(driver)
+        update_watchlist(driver)
         open_pages(driver, maximum_opened_pages)
     except Exception as e:
         logging.exception(e)

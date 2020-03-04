@@ -274,7 +274,7 @@ def open_pages(driver: webdriver.Firefox, maximum_opened_pages: int) -> None:
     condition = expected_conditions.presence_of_all_elements_located((By.XPATH, WATCHLIST_XPATH))
 
     with Database(DATABASE_FILENAME) as database:
-        entries_to_open: [WatchlistEntry] = []
+        entries_to_open: List[WatchlistEntry] = []
         for watchlist_section in wait.until(condition):
             watchlist_html = watchlist_section.get_attribute('innerHTML')
             parser = WatchlistParser()

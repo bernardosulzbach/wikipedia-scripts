@@ -274,6 +274,7 @@ def open_pages(driver: webdriver.Firefox, maximum_opened_pages: int) -> None:
     condition = expected_conditions.presence_of_all_elements_located((By.XPATH, WATCHLIST_XPATH))
 
     with Database(DATABASE_FILENAME) as database:
+        entries_to_open: [WatchlistEntry] = []
         for watchlist_section in wait.until(condition):
             watchlist_html = watchlist_section.get_attribute('innerHTML')
             parser = WatchlistParser()
@@ -281,21 +282,23 @@ def open_pages(driver: webdriver.Firefox, maximum_opened_pages: int) -> None:
             for i, entry in enumerate(parser.watchlist_entries):
                 if entry.seen:
                     logging.info('Skipped {} as it was seen.'.format(entry.page_title))
-                elif opened_pages < maximum_opened_pages:
-                    # Get the URL of the proper difference.
-                    driver.get(entry.history_url)
-                    xpath = PAGE_HISTORY_DIFFERENCE_URL_XPATH
-                    first_seen_revision = expected_conditions.presence_of_element_located((By.XPATH, xpath))
-                    url = wait.until(first_seen_revision).get_attribute('href')
-                    driver.back()
-                    # Open this difference for human inspection.
-                    webbrowser.open(url, autoraise=False)
-                    database.add_page_open(entry.page_title)
-                    opened_pages += 1
-                    logging.info('Opened {} ({}).'.format(entry.page_title, url))
+                elif len(entries_to_open) < maximum_opened_pages:
+                    entries_to_open.append(entry)
                 else:
                     unseen_but_not_opened_pages += 1
             fetched_pages += len(parser.watchlist_entries)
+        urls_to_open = []
+        for entry in entries_to_open:
+            driver.get(entry.history_url)
+            xpath = PAGE_HISTORY_DIFFERENCE_URL_XPATH
+            first_seen_revision = expected_conditions.presence_of_element_located((By.XPATH, xpath))
+            url_to_open = wait.until(first_seen_revision).get_attribute('href')
+            urls_to_open.append(url_to_open)
+        for entry, url_to_open in zip(entries_to_open, urls_to_open):
+            webbrowser.open(url_to_open, autoraise=False)
+            database.add_page_open(entry.page_title)
+            opened_pages += 1
+            logging.info('Opened {} ({}).'.format(entry.page_title, url_to_open))
         logging.info('Fetched {} page(s).'.format(fetched_pages))
         logging.info('Unseen entries that were not opened: {}.'.format(unseen_but_not_opened_pages))
 

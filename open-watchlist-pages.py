@@ -17,6 +17,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 WATCHLIST_XPATH = '//*[@id="mw-content-text"]/div[4]/ul'
 EDIT_WATCHLIST_XPATH = '//div/div/span/label/a[1]'
 
+PAGE_HISTORY_SEEN_LINE_XPATH = 'li[not(contains(@class, "mw-history-line-updated"))]'
+PAGE_HISTORY_DIFFERENCE_URL_XPATH = '//*[@id="pagehistory"]/{}/span[1]/span[1]/a'.format(PAGE_HISTORY_SEEN_LINE_XPATH)
+
 SCRIPT_NAME = 'open-watchlist-pages'
 
 # In seconds
@@ -86,7 +89,7 @@ def has_class(attributes: List[Tuple[str, str]], name: str) -> bool:
 class WatchlistEntry:
     def __init__(self, page_title: str):
         self.page_title: str = page_title
-        self.page_url: Optional[str] = None
+        self.history_url: Optional[str] = None
         self.user: Optional[str] = None
         self.user_url: Optional[str] = None
         self.diff: Optional[str] = None
@@ -121,9 +124,9 @@ class WatchlistParser(HTMLParser):
                 raise Exception('Should not have a line that does not define if it has been seen or not.')
         if self.skipping_log_action:
             return
-        if has_class(attributes, 'mw-changeslist-diff'):
+        if has_class(attributes, 'mw-changeslist-history'):
             self.watchlist_entries.append(WatchlistEntry(get_attribute(attributes, 'title')))
-            self.watchlist_entries[-1].page_url = get_attribute(attributes, 'href')
+            self.watchlist_entries[-1].history_url = WIKIPEDIA_BASE_URL + get_attribute(attributes, 'href')
             if self.next_seen is None:
                 raise Exception('Should not have unknown "seen" about an entry.')
             self.watchlist_entries[-1].seen = self.next_seen
@@ -279,8 +282,13 @@ def open_pages(driver: webdriver.Firefox, maximum_opened_pages: int) -> None:
                 if entry.seen:
                     logging.info('Skipped {} as it was seen.'.format(entry.page_title))
                 elif opened_pages < maximum_opened_pages:
-                    url = set_query_parameter(WIKIPEDIA_BASE_URL + entry.page_url, 'diff', '0')
-                    url = remove_query_parameter(url, 'curid')
+                    # Get the URL of the proper difference.
+                    driver.get(entry.history_url)
+                    xpath = PAGE_HISTORY_DIFFERENCE_URL_XPATH
+                    first_seen_revision = expected_conditions.presence_of_element_located((By.XPATH, xpath))
+                    url = wait.until(first_seen_revision).get_attribute('href')
+                    driver.back()
+                    # Open this difference for human inspection.
                     webbrowser.open(url, autoraise=False)
                     database.add_page_open(entry.page_title)
                     opened_pages += 1

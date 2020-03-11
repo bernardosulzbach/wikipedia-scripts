@@ -4,6 +4,7 @@ import json
 import logging
 import sqlite3
 import time
+import timeit
 import urllib.parse
 import webbrowser
 from html.parser import HTMLParser
@@ -46,6 +47,24 @@ PASSWORD_JSON_FIELD = 'password'
 USERNAME_FIELD_XPATH = '//*[@id="wpName1"]'
 PASSWORD_FIELD_XPATH = '//*[@id="wpPassword1"]'
 LOGIN_BUTTON_XPATH = '//*[@id="wpLoginAttempt"]'
+
+
+class Timer:
+    def __init__(self, task_name: str):
+        self._task_name = task_name
+        self._start_time = None
+
+    def __enter__(self):
+        self._start_time = timeit.default_timer()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        elapsed_seconds = timeit.default_timer() - self._start_time
+        duration_string = str(datetime.timedelta(seconds=elapsed_seconds))
+        if exc_type is None:
+            logging.info('Task "{}" took {}.'.format(self._task_name, duration_string))
+        else:
+            logging.info('Task "{}" raised an exception after {}.'.format(self._task_name, duration_string))
 
 
 def get_expected_field_from_json(json_object, field_name):
@@ -315,9 +334,12 @@ def main():
     options.add_argument('-headless')
     driver = webdriver.Firefox(executable_path='./dependencies/geckodriver', options=options)
     try:
-        login(driver)
-        update_watchlist(driver)
-        open_pages(driver, maximum_opened_pages)
+        with Timer('login'):
+            login(driver)
+        with Timer('update watchlist'):
+            update_watchlist(driver)
+        with Timer('open pages'):
+            open_pages(driver, maximum_opened_pages)
     except Exception as e:
         logging.exception(e)
     finally:
